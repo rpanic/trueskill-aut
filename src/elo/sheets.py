@@ -55,7 +55,9 @@ def extract_sheet(spreadsheet_id: str, range_name: str) -> list[list[str]]:
 
     raw_values = result.get("values", [])
     # Convert all values to strings
-    return [[str(cell) if cell is not None else "" for cell in row] for row in raw_values]
+    return [
+        [str(cell) if cell is not None else "" for cell in row] for row in raw_values
+    ]
 
 
 def extract_all(spreadsheet_id: str, sheet_name: str = "Sheet1") -> list[list[str]]:
@@ -69,3 +71,4 @@ def extract_all(spreadsheet_id: str, sheet_name: str = "Sheet1") -> list[list[st
         2D list of all cell values as strings.
     """
     return extract_sheet(spreadsheet_id, sheet_name)
+
