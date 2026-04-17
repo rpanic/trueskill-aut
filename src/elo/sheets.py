@@ -1,6 +1,7 @@
 """Google Sheets API integration."""
 
 import os
+import csv
 from pathlib import Path
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -72,3 +73,33 @@ def extract_all(spreadsheet_id: str, sheet_name: str = "Sheet1") -> list[list[st
     """
     return extract_sheet(spreadsheet_id, sheet_name)
 
+
+def extract_local_sheet(spreadsheet_path: str) -> list[list[str]]:
+    """Extract data from a local Excel file.
+
+    Args:
+        spreadsheet_path: Path to the local Excel file.
+
+    """
+
+    raw_values = []
+    with open(spreadsheet_path, newline="") as csvfile:
+        test_data = csv.reader(csvfile, delimiter=",", quotechar='"')
+        for row in test_data:
+            raw_values.append(row)
+    # Convert all values to strings
+    return [
+        [str(cell) if cell is not None else "" for cell in row] for row in raw_values
+    ]
+
+
+def write_local_sheet(spreadsheet_path: str, data: list[list[str]]) -> None:
+    """Write data to a local CSV file.
+
+    Args:
+        spreadsheet_path: Path to the local CSV file.
+        data: 2D list of cell values to write.
+    """
+    with open(spreadsheet_path, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(data)

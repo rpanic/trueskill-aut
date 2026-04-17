@@ -2,16 +2,17 @@
 
 from datetime import datetime
 from sheets import extract_sheet
+from sheets import extract_local_sheet
 from rating import PlayerRatings
 
 
 # Expected Google Sheet format (columns):
 # | date       | team_a_players      | team_b_players      | team_a_score | team_b_score |
 # |------------|---------------------|---------------------|------|---|
-# | 2024-01-15 | Alice, Bob          | Charlie, Diana      | 15   | 12|
-# | 2024-01-22 | Alice, Eve          | Bob, Frank          | 20   | 18|
+# | 2024-01-15 12:00:00 | Alice, Bob          | Charlie, Diana      | 15   | 12|
+# | 2024-01-22 11:50:00 | Alice, Eve          | Bob, Frank          | 20   | 18|
 #
-# - date: Match date (YYYY-MM-DD)
+# - date: Match date (YYYY-MM-DD H:M:S)
 # - team_a_players: Comma-separated player names for team A
 # - team_b_players: Comma-separated player names for team B
 # - team_a_score: Final score for team A
@@ -99,9 +100,9 @@ def process_matches(data: list[list[str]]) -> PlayerRatings:
     return ratings
 
 
-def compute_rankings_from_sheet(
+def compute_ratings_from_sheet(
     spreadsheet_id: str, sheet_name: str = "Sheet1"
-) -> list[tuple[str, float, float, int]]:
+) -> PlayerRatings:
     """Extract match data from Google Sheets and compute player rankings.
 
     Args:
@@ -112,13 +113,16 @@ def compute_rankings_from_sheet(
         List of (player_name, mu, sigma, match_count) tuples sorted by conservative rating.
     """
     # Extract data from sheet
-    data = extract_sheet(spreadsheet_id, sheet_name)
+    if os.environ.get("MODE") == "online":
+        data = extract_sheet(spreadsheet_id, sheet_name)
+    else:
+        data = extract_local_sheet("test_data.csv")
 
     # Process matches and compute ratings
     ratings = process_matches(data)
 
     # Return leaderboard
-    return ratings.get_leaderboard()
+    return ratings
 
 
 def print_rankings(rankings: list[tuple[str, float, float, int]]) -> None:
@@ -132,10 +136,30 @@ def print_rankings(rankings: list[tuple[str, float, float, int]]) -> None:
     )
     print("-" * 70)
 
+    # do we want conservatrive rating here? Displayed rating
+
+    # In some deployments, a conservative skill estimate is displayed rather than the posterior mean. The TrueSkill paper describes displaying the 1% lower quantile of the belief distribution, which
+    # for a Gaussian distribution is approximately μ − 3 σ. In plain terms, this is a value that the system expects the player's true skill to exceed about 99% of
+    # the time, given the current uncertainty. As a result, a player with a high mean but large uncertainty (large σ {\displaystyle \sigma }) will have a lower displayed rating than a similarly
+    # rated player whose skill is estimated more confidently.
+
     for rank, (name, mu, sigma, matches) in enumerate(rankings, 1):
         conservative = mu - 3 * sigma
         print(
             f"{rank:<6} {name:<20} {conservative:<10.1f} ±{sigma:<11.1f} {matches:<8}"
+        )
+
+
+def print_player_history(
+    player_name: str, history: list[tuple[datetime, float, float]]
+) -> None:
+    print(f"{'Player':<6} {player_name:<20} ")
+    print(f"{'Date':<6} {'Rating':<10} {'Uncertainty':<12}")
+    print("-" * 70)
+    for date, mu, sigma in history:
+        conservative = mu - 3 * sigma
+        print(
+            f"{'':<6} {date.strftime('%Y-%m-%d'):<8} {conservative:<10.1f} ±{sigma:<11.1f} "
         )
 
 
@@ -146,8 +170,10 @@ def main(spreadsheet_id: str, sheet_name: str = "Sheet1") -> None:
         spreadsheet_id: The Google Sheets spreadsheet ID.
         sheet_name: Name of the sheet tab (default: "Sheet1").
     """
-    rankings = compute_rankings_from_sheet(spreadsheet_id, sheet_name)
-    print_rankings(rankings)
+    ratings = compute_ratings_from_sheet(spreadsheet_id, sheet_name)
+    print_rankings(ratings.get_leaderboard())
+    for player_name in ratings.player_history:
+        print_player_history(player_name, ratings.get_player_history(player_name))
 
 
 if __name__ == "__main__":

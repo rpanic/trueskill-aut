@@ -8,3 +8,4 @@ trueskillthroughtime>=0.1.0
 
 # Development
 python-dotenv>=1.0.0
+python-csv>=0.0.14

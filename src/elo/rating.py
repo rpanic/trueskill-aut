@@ -122,7 +122,7 @@ class PlayerRatings:
         # Create Game with teams and score differences
         # Scores are passed directly to result parameter for ranking
         teams = [team_a_player_objs, team_b_player_objs]
-        game = Game(teams, result=[team_a_score, team_b_score])
+        game = Game(teams, result=[team_a_score, team_b_score], p_draw=0.0)
 
         # Extract updated skills from game posteriors
         posteriors = game.posteriors()
@@ -212,4 +212,3 @@ class PlayerRatings:
             (date, skill.mu, skill.sigma)
             for date, skill in self.player_history[player_name]
         ]
-
