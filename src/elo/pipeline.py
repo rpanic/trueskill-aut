@@ -1,8 +1,13 @@
 """Pipeline to extract match data from Google Sheets and compute player rankings."""
 
+import os
 from datetime import datetime
 from sheets import extract_sheet
 from sheets import extract_local_sheet
+from sheets import write_sheet
+from sheets import write_leaderboard_sheet
+from sheets import write_player_history_sheet
+from sheets import write_all_player_histories
 from rating import PlayerRatings
 
 
@@ -153,14 +158,13 @@ def print_rankings(rankings: list[tuple[str, float, float, int]]) -> None:
 def print_player_history(
     player_name: str, history: list[tuple[datetime, float, float]]
 ) -> None:
+    print("-" * 70)
     print(f"{'Player':<6} {player_name:<20} ")
     print(f"{'Date':<6} {'Rating':<10} {'Uncertainty':<12}")
     print("-" * 70)
     for date, mu, sigma in history:
         conservative = mu - 3 * sigma
-        print(
-            f"{'':<6} {date.strftime('%Y-%m-%d'):<8} {conservative:<10.1f} ±{sigma:<11.1f} "
-        )
+        print(f"{date.strftime('%Y-%m-%d'):<8} {conservative:<10.1f} ±{sigma:<11.1f} ")
 
 
 def main(spreadsheet_id: str, sheet_name: str = "Sheet1") -> None:
@@ -174,6 +178,104 @@ def main(spreadsheet_id: str, sheet_name: str = "Sheet1") -> None:
     print_rankings(ratings.get_leaderboard())
     for player_name in ratings.player_history:
         print_player_history(player_name, ratings.get_player_history(player_name))
+
+    write_all_player_histories_to_sheet(spreadsheet_id, ratings)
+    write_leaderboard_to_sheet(spreadsheet_id, ratings)
+
+
+def write_leaderboard_to_sheet(
+    spreadsheet_id: str,
+    ratings: PlayerRatings,
+    sheet_name: str = "Leaderboard",
+    min_matches: int = 0,
+) -> dict:
+    """Write player leaderboard to a Google Sheet.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        ratings: PlayerRatings object with computed ratings.
+        sheet_name: Name of the sheet tab to write to (default: "Leaderboard").
+        min_matches: Only include players with at least this many matches.
+
+    Returns:
+        Response from the Google Sheets API.
+    """
+    leaderboard = ratings.get_leaderboard(min_matches=min_matches)
+    return write_leaderboard_sheet(spreadsheet_id, leaderboard, sheet_name)
+
+
+def write_player_history_to_sheet(
+    spreadsheet_id: str,
+    ratings: PlayerRatings,
+    player_name: str,
+    sheet_name: str = "Player History",
+) -> dict:
+    """Write single player's history to a Google Sheet.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        ratings: PlayerRatings object with computed ratings.
+        player_name: Name of the player to export.
+        sheet_name: Name of the sheet tab to write to (default: "Player History").
+
+    Returns:
+        Response from the Google Sheets API.
+    """
+    history = ratings.get_player_history(player_name)
+    return write_player_history_sheet(spreadsheet_id, player_name, history, sheet_name)
+
+
+def write_all_player_histories_to_sheet(
+    spreadsheet_id: str,
+    ratings: PlayerRatings,
+    sheet_name: str = "All Histories",
+) -> dict:
+    """Write all players' histories to a Google Sheet.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        ratings: PlayerRatings object with computed ratings.
+        sheet_name: Name of the sheet tab to write to (default: "All Histories").
+
+    Returns:
+        Response from the Google Sheets API.
+    """
+    player_histories = {
+        name: ratings.get_player_history(name) for name in ratings.player_history
+    }
+    return write_all_player_histories(spreadsheet_id, player_histories, sheet_name)
+
+
+def write_results_to_sheet(
+    spreadsheet_id: str,
+    ratings: PlayerRatings,
+    leaderboard_sheet: str = "Leaderboard",
+    histories_sheet: str = "All Histories",
+    min_matches: int = 0,
+) -> dict:
+    """Write both leaderboard and all player histories to Google Sheets.
+
+    Convenience function that writes both leaderboard and player history
+    data in a single call.
+
+    Args:
+        spreadsheet_id: The Google Sheets spreadsheet ID.
+        ratings: PlayerRatings object with computed ratings.
+        leaderboard_sheet: Name of the sheet tab for leaderboard (default: "Leaderboard").
+        histories_sheet: Name of the sheet tab for histories (default: "All Histories").
+        min_matches: Only include players in leaderboard with at least this many matches.
+
+    Returns:
+        Dict with keys "leaderboard" and "histories" containing API responses.
+    """
+    results = {}
+    results["leaderboard"] = write_leaderboard_to_sheet(
+        spreadsheet_id, ratings, leaderboard_sheet, min_matches
+    )
+    results["histories"] = write_all_player_histories_to_sheet(
+        spreadsheet_id, ratings, histories_sheet
+    )
+    return results
 
 
 if __name__ == "__main__":

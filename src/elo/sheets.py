@@ -7,7 +7,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
 def get_sheets_service():
@@ -103,3 +103,175 @@ def write_local_sheet(spreadsheet_path: str, data: list[list[str]]) -> None:
     with open(spreadsheet_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(data)
+
+
+def write_sheet(
+    spreadsheet_id: str,
+    range_name: str,
+    data: list[list],
+    value_input_option: str = "USER_ENTERED",
+) -> dict:
+    """Write data to a Google Sheet.
+
+    Args:
+        spreadsheet_id: The ID of the spreadsheet.
+        range_name: A1 notation range (e.g., 'Sheet1!A1', 'Leaderboard').
+        data: 2D list of values to write (each row is a list).
+        value_input_option: How to interpret input values. Use "USER_ENTERED" for
+            formulas, "RAW" for literal values.
+
+    Returns:
+        Response from the API.
+    """
+    service = get_sheets_service()
+    body = {"values": data}
+    result = (
+        service.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueInputOption=value_input_option,
+            body=body,
+        )
+        .execute()
+    )
+    return result
+
+
+def clear_sheet(spreadsheet_id: str, range_name: str) -> dict:
+    """Clear data from a Google Sheet.
+
+    Args:
+        spreadsheet_id: The ID of the spreadsheet.
+        range_name: A1 notation range (e.g., 'Sheet1', 'A:Z').
+
+    Returns:
+        Response from the API.
+    """
+    service = get_sheets_service()
+    result = (
+        service.spreadsheets()
+        .values()
+        .clear(spreadsheetId=spreadsheet_id, range=range_name)
+        .execute()
+    )
+    return result
+
+
+def write_leaderboard_sheet(
+    spreadsheet_id: str,
+    leaderboard: list[tuple[str, float, float, int]],
+    sheet_name: str = "Leaderboard",
+) -> dict:
+    """Write leaderboard data to a Google Sheet.
+
+    Args:
+        spreadsheet_id: The ID of the spreadsheet.
+        leaderboard: List of (name, mu, sigma, match_count) tuples.
+        sheet_name: Name of the sheet tab to write to.
+
+    Returns:
+        Response from the API.
+    """
+    # Build header row
+    headers = ["Rank", "Player", "Rating", "Uncertainty", "Matches"]
+
+    # Build data rows with rank and conservative rating (mu - 3*sigma)
+    data = [headers]
+    for rank, (name, mu, sigma, matches) in enumerate(leaderboard, 1):
+        conservative_rating = mu - 3 * sigma
+        data.append(
+            [
+                str(rank),
+                name,
+                f"{conservative_rating:.1f}",
+                f"{sigma:.1f}",
+                str(matches),
+            ]
+        )
+
+    # Write to sheet (clear first if it exists)
+    range_name = f"{sheet_name}!A1"
+    return write_sheet(spreadsheet_id, range_name, data)
+
+
+def write_player_history_sheet(
+    spreadsheet_id: str,
+    player_name: str,
+    history: list[tuple],
+    sheet_name: str = "Player History",
+) -> dict:
+    """Write player history data to a Google Sheet.
+
+    Args:
+        spreadsheet_id: The ID of the spreadsheet.
+        player_name: Name of the player.
+        history: List of (date, mu, sigma) tuples in chronological order.
+        sheet_name: Name of the sheet tab to write to.
+
+    Returns:
+        Response from the API.
+    """
+    # Build header row
+    headers = ["Player", "Date", "Rating", "Uncertainty", "Mu", "Sigma"]
+
+    # Build data rows
+    data = [headers]
+    for date, mu, sigma in history:
+        conservative_rating = mu - 3 * sigma
+        date_str = date.strftime("%Y-%m-%d %H:%M:%S")
+        data.append(
+            [
+                player_name,
+                date_str,
+                f"{conservative_rating:.1f}",
+                f"{sigma:.1f}",
+                f"{mu:.1f}",
+                f"{sigma:.1f}",
+            ]
+        )
+
+    # Write to sheet
+    range_name = f"{sheet_name}!A1"
+    return write_sheet(spreadsheet_id, range_name, data)
+
+
+def write_all_player_histories(
+    spreadsheet_id: str,
+    player_histories: dict[str, list[tuple]],
+    sheet_name: str = "All Histories",
+) -> dict:
+    """Write all player histories to a Google Sheet (one row per history entry).
+
+    Args:
+        spreadsheet_id: The ID of the spreadsheet.
+        player_histories: Dict mapping player name to list of (date, mu, sigma) tuples.
+        sheet_name: Name of the sheet tab to write to.
+
+    Returns:
+        Response from the API.
+    """
+    # Build header row
+    headers = ["Player", "Date", "Rating", "Uncertainty", "Mu", "Sigma"]
+
+    # Build data rows for all players
+    data = [headers]
+    for player_name, history in player_histories.items():
+        for date, mu, sigma in history:
+            conservative_rating = mu - 3 * sigma
+            date_str = date.strftime("%Y-%m-%d %H:%M:%S")
+            data.append(
+                [
+                    player_name,
+                    date_str,
+                    f"{conservative_rating:.1f}",
+                    f"{sigma:.1f}",
+                    f"{mu:.1f}",
+                    f"{sigma:.1f}",
+                ]
+            )
+
+    # Write to sheet
+    range_name = f"{sheet_name}!A1"
+    return write_sheet(spreadsheet_id, range_name, data)
