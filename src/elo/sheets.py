@@ -109,7 +109,7 @@ def write_sheet(
     spreadsheet_id: str,
     range_name: str,
     data: list[list],
-    value_input_option: str = "USER_ENTERED",
+    value_input_option: str = "RAW",
 ) -> dict:
     """Write data to a Google Sheet.
 
@@ -175,7 +175,14 @@ def write_leaderboard_sheet(
         Response from the API.
     """
     # Build header row
-    headers = ["Rank", "Player", "Rating", "Uncertainty", "Matches"]
+    headers = [
+        "Rank",
+        "Player",
+        "Rating",
+        "Conservative Rating",
+        "Uncertainty",
+        "Matches",
+    ]
 
     # Build data rows with rank and conservative rating (mu - 3*sigma)
     data = [headers]
@@ -185,6 +192,7 @@ def write_leaderboard_sheet(
             [
                 str(rank),
                 name,
+                f"{mu:.1f}",
                 f"{conservative_rating:.1f}",
                 f"{sigma:.1f}",
                 str(matches),
@@ -193,6 +201,7 @@ def write_leaderboard_sheet(
 
     # Write to sheet (clear first if it exists)
     range_name = f"{sheet_name}!A1"
+    clear_sheet(spreadsheet_id, sheet_name)
     return write_sheet(spreadsheet_id, range_name, data)
 
 
@@ -214,7 +223,14 @@ def write_player_history_sheet(
         Response from the API.
     """
     # Build header row
-    headers = ["Player", "Date", "Rating", "Uncertainty", "Mu", "Sigma"]
+    headers = [
+        "Player",
+        "Date",
+        "Conservative Rating",
+        "Uncertainty",
+        "Mu (Actual Rating)",
+        "Sigma",
+    ]
 
     # Build data rows
     data = [headers]
@@ -234,6 +250,7 @@ def write_player_history_sheet(
 
     # Write to sheet
     range_name = f"{sheet_name}!A1"
+    clear_sheet(spreadsheet_id, sheet_name)
     return write_sheet(spreadsheet_id, range_name, data)
 
 
@@ -274,4 +291,5 @@ def write_all_player_histories(
 
     # Write to sheet
     range_name = f"{sheet_name}!A1"
+    clear_sheet(spreadsheet_id, range_name)
     return write_sheet(spreadsheet_id, range_name, data)
